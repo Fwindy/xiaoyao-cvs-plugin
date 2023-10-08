@@ -166,9 +166,9 @@ export default class miHoYoApi {
 			bbsCaptchaVerify: {
 				url: `${mys.bbs_api}/misc/api/verifyVerification`,
 				body: {
-					"geetest_challenge": data.challenge, //challenge,
-					"geetest_validate": data.validate,
-					"geetest_seccode": `${data.validate}|jordan`
+					"geetest_challenge": data.geetest_challenge,
+					"geetest_validate": data.geetest_validate,
+					"geetest_seccode": data.geetest_seccode
 				},
 				types: 'bbs'
 			},
@@ -213,11 +213,6 @@ export default class miHoYoApi {
 				url: `${this.apiMap.apiWeb}/auth/api/getMultiTokenByLoginTicket`,
 				query: `login_ticket=${data.loginTicket}&token_types=3&uid=${data.loginUid}`,
 				types: 'stoken'
-			},
-			//很抱歉由于有人恶意倒卖，不得已只能是关闭免费token了 开放免费供人使用还被恶意倒卖指责 开源确实不好弄捏
-			validate: {
-				url: `http://api.fuckmys.tk/geetest`,
-				query: `token=${data?.getToken}&gt=${data.gt}&challenge=${data.challenge}`
 			},
 			cloudLogin: {
 				url: `${mys.cloud_api}/hk4e_cg_cn/gamer/api/login`,

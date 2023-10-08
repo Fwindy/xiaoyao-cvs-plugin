@@ -129,49 +129,45 @@ export default class user {
                         message += `${item.nickname}-${item.game_uid}：今日已签到~\n`;
                     } else {
                         let signMsg = '';
-                        for (let i = 0; i < 2; i++) { //循环请求
-                            await utils.sleepAsync(2000)
-                            res = await this.getData("sign", data, false)
-                            if (res?.data?.gt) {
-                                let validate = await this.geetest(res.data)
-                                if (validate) {
-                                    let header = {}
-                                    header["x-rpc-challenge"] = res["data"]["challenge"]
-                                    header["x-rpc-validate"] = validate
-                                    header["x-rpc-seccode"] = `${validate}|jordan`
-                                    data.headers = header
-                                    res = await this.getData("sign", data, false)
-                                    if (!res?.data?.gt) {
-                                        if (this.allSign) {
-                                            this.allSign[forum.name].sign++;
-                                        }
-                                        signMsg = `${item.nickname}-${item.game_uid}:验证码签到成功~\n`
-                                        item.total_sign_day++;
-                                        break;
-                                    } else {
-                                        if (this.allSign) {
-                                            this.allSign[forum.name].error++;
-                                        }
-                                        item.is_sign = false;
-                                        signMsg =
-                                            `${item.nickname}-${item.game_uid}:签到出现验证码~\n请晚点后重试，或者手动上米游社签到\n`;
+                        res = await this.getData("sign", data, false)
+                        if (res?.data?.gt) {
+                            res = await this.geetest(res.data)
+                            if (res.geetest_validate) {
+                                let header = {}
+                                header["x-rpc-challenge"] = res.geetest_challenge
+                                header["x-rpc-validate"] = res.geetest_validate
+                                header["x-rpc-seccode"] = res.geetest_seccode
+                                data.headers = header
+                                res = await this.getData("sign", data, false)
+                                if (!res?.data?.gt) {
+                                    if (this.allSign) {
+                                        this.allSign[forum.name].sign++;
                                     }
+                                    signMsg = `${item.nickname}-${item.game_uid}:验证码签到成功~\n`
+                                    item.total_sign_day++;
+                                    break;
                                 } else {
                                     if (this.allSign) {
                                         this.allSign[forum.name].error++;
                                     }
-                                    signMsg = `${item.nickname}-${item.game_uid}:验证码失败~\n`
+                                    item.is_sign = false;
+                                    signMsg =
+                                        `${item.nickname}-${item.game_uid}:签到出现验证码~\n请晚点后重试，或者手动上米游社签到\n`;
                                 }
-
                             } else {
                                 if (this.allSign) {
-                                    this.allSign[forum.name].sign++;
+                                    this.allSign[forum.name].error++;
                                 }
-                                item.total_sign_day++;
-                                signMsg =
-                                    `${item.nickname}-${item.game_uid}：${res.message == "OK" ? "签到成功" : res.message}\n`
-                                break;
+                                signMsg = `${item.nickname}-${item.game_uid}:验证码失败~\n`
                             }
+                        } else {
+                            if (this.allSign) {
+                                this.allSign[forum.name].sign++;
+                            }
+                            item.total_sign_day++;
+                            signMsg =
+                                `${item.nickname}-${item.game_uid}：${res.message == "OK" ? "签到成功" : res.message}\n`
+                            break;
                         }
                         message += signMsg
                     }
@@ -652,38 +648,65 @@ export default class user {
     }
 
     async bbsGeetest() {
-        if (!this.getToken) return ""
         try {
             let res = await this.getData('bbsGetCaptcha', false)
-            // let challenge = res.data["challenge"]
-            // await this.getData("geeType", res.data, false)
-            res.data.getToken = this.getToken
-            res = await this.getData("validate", res.data, false)
-            if (res?.data?.validate) {
-                res = await this.getData("bbsCaptchaVerify", res.data, false)
-                return res["data"]["challenge"]
+            let gt = res.data.gt
+            let challenge = res.data.challenge
+
+            // await this.e.reply(`请完成验证：https://challenge.minigg.cn/manual/index.html?gt=${gt}&challenge=${challenge}`)
+            await utils.replyMake(this.e, [`请完成验证：https://challenge.minigg.cn/manual/index.html?gt=${gt}&challenge=${challenge}`], 0)
+
+            for (let n=0; n<12; n++) {
+                await utils.sleepAsync(5000)
+
+                res = await fetch(`https://challenge.minigg.cn/manual/?callback=${challenge}`)
+                if (!res.ok) {
+                    logger.error(`[validate][${this.uid}] ${res.status} ${res.statusText}`)
+                } else {
+                    res = await res.json()
+                    if (res?.data?.geetest_validate) {
+                        logger.mark(`[validate][${this.uid}] mys手动验证完成`)
+                        res = await this.getData("bbsCaptchaVerify", res.data, false)
+                        await this.e.reply('mys手动验证通过')
+                        return res.data.challenge
+                    }
+                }
             }
+            await this.e.reply('mys超时未验证')
         } catch (error) {
             //大概率是数据空导致报错这种情况很少见捏，所以你可以忽略不看
-            Bot.logger.error('[validate][接口请求]异常信息：' + error)
-            return ""
+            Bot.logger.error(`[validate][${this.uid}] 出错：${error}`)
         }
         return ""
     }
 
     async geetest(data) {
-        if (!this.getToken) return ""
         try {
-            data.getToken = this.getToken
-            let res = await this.getData("validate", data, false)
-            if (res?.data?.validate) {
-                let validate = res?.data?.validate
-                return validate
+            let gt = data.gt
+            let challenge = data.challenge
+
+            // await this.e.reply(`请完成验证：https://challenge.minigg.cn/manual/index.html?gt=${gt}&challenge=${challenge}`)
+            await utils.replyMake(this.e, [`请完成验证：https://challenge.minigg.cn/manual/index.html?gt=${gt}&challenge=${challenge}`], 0)
+
+            for (let n=0; n<12; n++) {
+                await utils.sleepAsync(5000)
+
+                let res = await fetch(`https://challenge.minigg.cn/manual/?callback=${challenge}`)
+                if (!res.ok) {
+                    logger.error(`[validate][${this.uid}] ${res.status} ${res.statusText}`)
+                } else {
+                    res = await res.json()
+                    if (res?.data?.geetest_validate) {
+                        logger.mark(`[validate][${this.uid}] 手动验证完成`)
+                        await this.e.reply('手动验证通过')
+                        return res.data
+                    }
+                }
             }
+            await this.e.reply('超时未验证')
         } catch (error) {
             //大概率是数据空导致报错这种情况很少见捏，所以你可以忽略不看
             Bot.logger.error('[validate][接口请求]异常信息：' + error)
-            return ""
         }
         return ""
     }
